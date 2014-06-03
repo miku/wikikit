@@ -13,6 +13,7 @@ import (
 	"strings"
 )
 
+var titleFilter = flag.String("f", "", "only filter pages that contain the given text (no regex)")
 var filter, _ = regexp.Compile("^file:.*|^talk:.*|^special:.*|^wikipedia:.*|^wiktionary:.*|^user:.*|^user_talk:.*")
 
 // Here is an example article from the Wikipedia XML dump
@@ -93,11 +94,13 @@ func main() {
 				p.CanonicalTitle = CanonicalizeTitle(p.Title)
 				m := filter.MatchString(p.CanonicalTitle)
 				if !m && p.Redir.Title == "" {
-					b, err := json.Marshal(p)
-					if err != nil {
-						os.Exit(2)
+					if strings.Contains(p.Title, *titleFilter) {
+						b, err := json.Marshal(p)
+						if err != nil {
+							os.Exit(2)
+						}
+						fmt.Println(string(b))
 					}
-					fmt.Println(string(b))
 				}
 			}
 		default:
