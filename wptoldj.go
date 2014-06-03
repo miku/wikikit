@@ -12,7 +12,7 @@ import (
 	"strings"
 )
 
-const AppVersion = "1.0.0"
+const AppVersion = "1.0.1"
 
 // Here is an example article from the Wikipedia XML dump
 //
@@ -54,7 +54,7 @@ func CanonicalizeTitle(title string) string {
 
 func main() {
 	version := flag.Bool("v", false, "prints current version and exits")
-	extractCategories := flag.Bool("c", false, "only extract categories TSV(page, category")
+	extractCategories := flag.String("c", "", "only extract categories TSV(page, category")
 	filter, _ := regexp.Compile("^file:.*|^talk:.*|^special:.*|^wikipedia:.*|^wiktionary:.*|^user:.*|^user_talk:.*")
 
 	flag.Parse()
@@ -79,7 +79,7 @@ func main() {
 
 	decoder := xml.NewDecoder(xmlFile)
 	var inElement string
-	categoryPattern := regexp.MustCompile(`\[\[Category:([^\[]+)\]\]`)
+	categoryPattern := regexp.MustCompile(`\[\[` + *extractCategories + `:([^\[]+)\]\]`)
 
 	for {
 		// Read tokens from the XML document in a stream.
@@ -103,7 +103,7 @@ func main() {
 				p.CanonicalTitle = CanonicalizeTitle(p.Title)
 				m := filter.MatchString(p.CanonicalTitle)
 				if !m && p.Redir.Title == "" {
-					if *extractCategories {
+					if *extractCategories != "" {
 						result := categoryPattern.FindAllStringSubmatch(p.Text, -1)
 						for _, value := range result {
 							category := strings.TrimSpace(strings.Replace(value[1], "|", "", -1))
