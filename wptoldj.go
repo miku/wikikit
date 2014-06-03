@@ -1,6 +1,5 @@
+// Convert Wikipedia XML dump to JSON or extract categories
 package main
-
-// An example streaming XML parser.
 
 import (
 	"encoding/json"
@@ -13,8 +12,7 @@ import (
 	"strings"
 )
 
-var titleFilter = flag.String("f", "", "only filter pages that contain the given text (no regex)")
-var filter, _ = regexp.Compile("^file:.*|^talk:.*|^special:.*|^wikipedia:.*|^wiktionary:.*|^user:.*|^user_talk:.*")
+const AppVersion = "1.0.0"
 
 // Here is an example article from the Wikipedia XML dump
 //
@@ -55,7 +53,16 @@ func CanonicalizeTitle(title string) string {
 }
 
 func main() {
+	version := flag.Bool("v", false, "prints current version and exits")
+	extractCategories := flag.Bool("c", false, "only extract categories TSV(page, category")
+	filter, _ := regexp.Compile("^file:.*|^talk:.*|^special:.*|^wikipedia:.*|^wiktionary:.*|^user:.*|^user_talk:.*")
+
 	flag.Parse()
+
+	if *version {
+		fmt.Println(AppVersion)
+		os.Exit(0)
+	}
 
 	if flag.NArg() < 1 {
 		fmt.Println("Usage: wptojson WIKIPEDIA-XML-DUMP")
@@ -72,6 +79,8 @@ func main() {
 
 	decoder := xml.NewDecoder(xmlFile)
 	var inElement string
+	categoryPattern := regexp.MustCompile(`\[\[Category:([^\[]+)\]\]`)
+
 	for {
 		// Read tokens from the XML document in a stream.
 		t, _ := decoder.Token()
@@ -94,7 +103,13 @@ func main() {
 				p.CanonicalTitle = CanonicalizeTitle(p.Title)
 				m := filter.MatchString(p.CanonicalTitle)
 				if !m && p.Redir.Title == "" {
-					if strings.Contains(p.Title, *titleFilter) {
+					if *extractCategories {
+						result := categoryPattern.FindAllStringSubmatch(p.Text, -1)
+						for _, value := range result {
+							category := strings.TrimSpace(strings.Replace(value[1], "|", "", -1))
+							fmt.Printf("%s\t%s\n", p.Title, category)
+						}
+					} else {
 						b, err := json.Marshal(p)
 						if err != nil {
 							os.Exit(2)
