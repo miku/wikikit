@@ -10,7 +10,7 @@ Convert Wikipedia XML dump into JSON.
           "title" : ""
        },
        "text" : "{{Red ....",
-       "ctitle" : "anarchism",q
+       "ctitle" : "anarchism",
        "title" : "Anarchism"
     }
 
