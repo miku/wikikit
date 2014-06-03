@@ -12,7 +12,7 @@ import (
 	"strings"
 )
 
-const AppVersion = "1.0.3"
+const AppVersion = "1.0.4"
 
 // Here is an example article from the Wikipedia XML dump
 //
@@ -86,7 +86,7 @@ func main() {
 	decoder := xml.NewDecoder(xmlFile)
 	var inElement string
 	categoryPattern := regexp.MustCompile(`\[\[` + *extractCategories + `:([^\[]+)\]\]`)
-	authorityDataPattern := regexp.MustCompile(`{{Normdaten[^}]*}}`)
+	authorityDataPattern := regexp.MustCompile(`(?mi){{Normdaten[^}]*}}`)
 
 	for {
 		// Read tokens from the XML document in a stream.
