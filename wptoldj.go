@@ -120,7 +120,7 @@ func main() {
 						result := authorityDataPattern.FindString(p.Text)
 						if result != "" {
 							// https://cdn.mediacru.sh/JsdjtGoLZBcR.png
-							result = strings.Replace(result, "\t", "")
+							result = strings.Replace(result, "\t", "", -1)
 							fmt.Printf("%s\t%s\n", p.Title, result)
 						}
 					} else {
