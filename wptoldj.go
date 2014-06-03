@@ -12,7 +12,7 @@ import (
 	"strings"
 )
 
-const AppVersion = "1.0.2"
+const AppVersion = "1.0.3"
 
 // Here is an example article from the Wikipedia XML dump
 //
@@ -119,6 +119,8 @@ func main() {
 					} else if *extractAuthorityData {
 						result := authorityDataPattern.FindString(p.Text)
 						if result != "" {
+							// https://cdn.mediacru.sh/JsdjtGoLZBcR.png
+							result = strings.Replace(result, "\t", "")
 							fmt.Printf("%s\t%s\n", p.Title, result)
 						}
 					} else {
