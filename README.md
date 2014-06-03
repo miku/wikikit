@@ -3,7 +3,7 @@ wptoldj
 
 Convert Wikipedia XML dump into JSON.
 
-    $ Usage: wptojson WIKIPEDIA-XML-DUMP
+    $ Usage: wptoldj WIKIPEDIA-XML-DUMP
 
     {
        "redirect" : {
