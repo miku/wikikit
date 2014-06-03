@@ -12,7 +12,7 @@ import (
 	"strings"
 )
 
-const AppVersion = "1.0.1"
+const AppVersion = "1.0.2"
 
 // Here is an example article from the Wikipedia XML dump
 //
@@ -55,9 +55,15 @@ func CanonicalizeTitle(title string) string {
 func main() {
 	version := flag.Bool("v", false, "prints current version and exits")
 	extractCategories := flag.String("c", "", "only extract categories TSV(page, category")
+	extractAuthorityData := flag.Bool("a", false, "only extract authority data (Normdaten)")
 	filter, _ := regexp.Compile("^file:.*|^talk:.*|^special:.*|^wikipedia:.*|^wiktionary:.*|^user:.*|^user_talk:.*")
 
 	flag.Parse()
+
+	if *extractCategories != "" && *extractAuthorityData {
+		fmt.Println("It's either -a or -c")
+		os.Exit(1)
+	}
 
 	if *version {
 		fmt.Println(AppVersion)
@@ -80,6 +86,7 @@ func main() {
 	decoder := xml.NewDecoder(xmlFile)
 	var inElement string
 	categoryPattern := regexp.MustCompile(`\[\[` + *extractCategories + `:([^\[]+)\]\]`)
+	authorityDataPattern := regexp.MustCompile(`{{Normdaten[^}]*}}`)
 
 	for {
 		// Read tokens from the XML document in a stream.
@@ -108,6 +115,11 @@ func main() {
 						for _, value := range result {
 							category := strings.TrimSpace(strings.Replace(value[1], "|", "", -1))
 							fmt.Printf("%s\t%s\n", p.Title, category)
+						}
+					} else if *extractAuthorityData {
+						result := authorityDataPattern.FindString(p.Text)
+						if result != "" {
+							fmt.Printf("%s\t%s\n", p.Title, result)
 						}
 					} else {
 						b, err := json.Marshal(p)
