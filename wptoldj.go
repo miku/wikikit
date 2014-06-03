@@ -3,18 +3,15 @@ package main
 // An example streaming XML parser.
 
 import (
-	"bufio"
-	"fmt"
-	"os"
-	"flag"
+	"encoding/json"
 	"encoding/xml"
-	"strings"
-	"regexp"
+	"flag"
+	"fmt"
 	"net/url"
+	"os"
+	"regexp"
+	"strings"
 )
-
-var inputFile = flag.String("infile", "enwiki-latest-pages-articles.xml", "Input file path")
-var indexFile = flag.String("indexfile", "out/article_list.txt", "article list output file")
 
 var filter, _ = regexp.Compile("^file:.*|^talk:.*|^special:.*|^wikipedia:.*|^wiktionary:.*|^user:.*|^user_talk:.*")
 
@@ -39,13 +36,14 @@ var filter, _ = regexp.Compile("^file:.*|^talk:.*|^special:.*|^wikipedia:.*|^wik
 // describe the XML schema structure.
 
 type Redirect struct {
-	Title string `xml:"title,attr"`
+	Title string `xml:"title,attr" json:"title"`
 }
 
 type Page struct {
-	Title string `xml:"title"`
-	Redir Redirect `xml:"redirect"`
-	Text string `xml:"revision>text"`
+	Title          string   `xml:"title" json:"title"`
+	CanonicalTitle string   `xml:"ctitle" json:"ctitle"`
+	Redir          Redirect `xml:"redirect" json:"redirect"`
+	Text           string   `xml:"revision>text" json:"text"`
 }
 
 func CanonicalizeTitle(title string) string {
@@ -55,20 +53,16 @@ func CanonicalizeTitle(title string) string {
 	return can
 }
 
-func WritePage(title string, text string) {
-	outFile, err := os.Create("out/docs/" + title)
-	if err == nil {
-		writer := bufio.NewWriter(outFile)
-		defer outFile.Close()
-		writer.WriteString(text)
-		writer.Flush()
-	}
-}
-
 func main() {
 	flag.Parse()
 
-	xmlFile, err := os.Open(*inputFile)
+	if flag.NArg() < 1 {
+		fmt.Println("Usage: wptojson WIKIPEDIA-XML-DUMP")
+		os.Exit(1)
+	}
+	inputFile := flag.Args()[0]
+
+	xmlFile, err := os.Open(inputFile)
 	if err != nil {
 		fmt.Println("Error opening file:", err)
 		return
@@ -76,7 +70,6 @@ func main() {
 	defer xmlFile.Close()
 
 	decoder := xml.NewDecoder(xmlFile)
-	total := 0
 	var inElement string
 	for {
 		// Read tokens from the XML document in a stream.
@@ -97,17 +90,17 @@ func main() {
 				decoder.DecodeElement(&p, &se)
 
 				// Do some stuff with the page.
-				p.Title = CanonicalizeTitle(p.Title)
-				m := filter.MatchString(p.Title)
+				p.CanonicalTitle = CanonicalizeTitle(p.Title)
+				m := filter.MatchString(p.CanonicalTitle)
 				if !m && p.Redir.Title == "" {
-					WritePage(p.Title, p.Text)
-					total++
+					b, err := json.Marshal(p)
+					if err != nil {
+						os.Exit(2)
+					}
+					fmt.Println(string(b))
 				}
 			}
 		default:
 		}
-		
 	}
-
-	fmt.Printf("Total articles: %d \n", total)
 }
