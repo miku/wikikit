@@ -12,7 +12,7 @@ import (
 	"strings"
 )
 
-const AppVersion = "1.0.4"
+const AppVersion = "1.0.5"
 
 // Here is an example article from the Wikipedia XML dump
 //
