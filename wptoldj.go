@@ -113,7 +113,12 @@ func main() {
 					if *extractCategories != "" {
 						result := categoryPattern.FindAllStringSubmatch(p.Text, -1)
 						for _, value := range result {
-							category := strings.TrimSpace(strings.Replace(value[1], "|", "", -1))
+							// replace anything after a |
+							category := strings.TrimSpace(value[1])
+							firstIndex := strings.Index(category, "|")
+							if firstIndex != -1 {
+								category = category[0:firstIndex]
+							}
 							fmt.Printf("%s\t%s\n", p.Title, category)
 						}
 					} else if *extractAuthorityData {
