@@ -5,6 +5,8 @@ Convert Wikipedia XML dump into JSON.
 
     $ wikikit WIKIPEDIA-XML-DUMP
 
+[![Gobuild download](http://gobuild.io/badge/github.com/miku/wikikit/download.png)](http://gobuild.io/download/github.com/miku/wikikit)
+
 Output:
 
     {
