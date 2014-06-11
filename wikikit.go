@@ -86,7 +86,7 @@ func main() {
 	}
 
 	if flag.NArg() < 1 {
-		fmt.Println("Usage: wptojson WIKIPEDIA-XML-DUMP")
+		flag.Usage()
 		os.Exit(1)
 	}
 	inputFile := flag.Args()[0]
