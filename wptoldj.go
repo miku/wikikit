@@ -12,7 +12,7 @@ import (
 	"strings"
 )
 
-const AppVersion = "1.0.5"
+const AppVersion = "1.0.6"
 
 // Here is an example article from the Wikipedia XML dump
 //
@@ -45,6 +45,13 @@ type Page struct {
 	Text           string   `xml:"revision>text" json:"text"`
 }
 
+type WikidataPage struct {
+	Title          string      `xml:"title" json:"title"`
+	CanonicalTitle string      `xml:"ctitle" json:"ctitle"`
+	Redir          Redirect    `xml:"redirect" json:"redirect"`
+	Content        interface{} `json:"content"`
+}
+
 func CanonicalizeTitle(title string) string {
 	can := strings.ToLower(title)
 	can = strings.Replace(can, " ", "_", -1)
@@ -56,6 +63,7 @@ func main() {
 	version := flag.Bool("v", false, "prints current version and exits")
 	extractCategories := flag.String("c", "", "only extract categories TSV(page, category")
 	extractAuthorityData := flag.Bool("a", false, "only extract authority data (Normdaten)")
+	decodeWikiData := flag.Bool("d", false, "decode the text key value")
 	filter, _ := regexp.Compile("^file:.*|^talk:.*|^special:.*|^wikipedia:.*|^wiktionary:.*|^user:.*|^user_talk:.*")
 
 	flag.Parse()
@@ -87,6 +95,9 @@ func main() {
 	var inElement string
 	categoryPattern := regexp.MustCompile(`\[\[` + *extractCategories + `:([^\[]+)\]\]`)
 	authorityDataPattern := regexp.MustCompile(`(?mi){{Normdaten[^}]*}}`)
+
+	// for wikidata
+	var container interface{}
 
 	for {
 		// Read tokens from the XML document in a stream.
@@ -128,6 +139,17 @@ func main() {
 							result = strings.Replace(result, "\t", "", -1)
 							fmt.Printf("%s\t%s\n", p.Title, result)
 						}
+					} else if *decodeWikiData {
+						json.Unmarshal([]byte(p.Text), &container)
+						parsed := WikidataPage{Title: p.Title,
+							CanonicalTitle: p.CanonicalTitle,
+							Content:        container,
+							Redir:          p.Redir}
+						b, err := json.Marshal(parsed)
+						if err != nil {
+							os.Exit(2)
+						}
+						fmt.Println(string(b))
 					} else {
 						b, err := json.Marshal(p)
 						if err != nil {
