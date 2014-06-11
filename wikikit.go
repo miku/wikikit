@@ -6,13 +6,14 @@ import (
 	"encoding/xml"
 	"flag"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"regexp"
 	"strings"
 )
 
-const AppVersion = "1.0.6"
+const AppVersion = "1.0.7"
 
 // Here is an example article from the Wikipedia XML dump
 //
@@ -147,11 +148,22 @@ func main() {
 							fmt.Printf("%s\t%s\n", p.Title, result)
 						}
 					} else if *decodeWikiData {
-						json.Unmarshal([]byte(p.Text), &container)
+
+						dec := json.NewDecoder(strings.NewReader(p.Text))
+						dec.UseNumber()
+
+						if err := dec.Decode(&container); err == io.EOF {
+							break
+						} else if err != nil {
+							fmt.Fprintf(os.Stderr, "%s\n", err)
+							continue
+						}
+
 						parsed := WikidataPage{Title: p.Title,
 							CanonicalTitle: p.CanonicalTitle,
 							Content:        container,
 							Redir:          p.Redir}
+
 						b, err := json.Marshal(parsed)
 						if err != nil {
 							os.Exit(2)
