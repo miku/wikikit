@@ -1,9 +1,9 @@
-wptoldj
+wikikit
 =======
 
 Convert Wikipedia XML dump into JSON.
 
-    $ wptoldj WIKIPEDIA-XML-DUMP
+    $ wikikit WIKIPEDIA-XML-DUMP
 
 Output:
 
@@ -18,8 +18,12 @@ Output:
 
 Extract category information only:
 
-    $ wptoldj.go -c Category WIKIPEDIA-XML-DUMP
+    $ wikikit -c Category WIKIPEDIA-XML-DUMP
 
 Extract authority data only:
 
-    $ wptoldj.go -a WIKIPEDIA-XML-DUMP
+    $ wikikit -a WIKIPEDIA-XML-DUMP
+
+De-literalize JSON text from wikidata pages/articles dumps:
+
+    $ wikikit -d WIKIDATA-XML-DUMP

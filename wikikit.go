@@ -60,11 +60,18 @@ func CanonicalizeTitle(title string) string {
 }
 
 func main() {
+
 	version := flag.Bool("v", false, "prints current version and exits")
-	extractCategories := flag.String("c", "", "only extract categories TSV(page, category")
+	extractCategories := flag.String("c", "", "only extract categories TSV(page, category)")
 	extractAuthorityData := flag.Bool("a", false, "only extract authority data (Normdaten)")
 	decodeWikiData := flag.Bool("d", false, "decode the text key value")
 	filter, _ := regexp.Compile("^file:.*|^talk:.*|^special:.*|^wikipedia:.*|^wiktionary:.*|^user:.*|^user_talk:.*")
+
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage of %s:\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "\nExtract and convert things from wikipedia/wikidata XML dumps.\n\n")
+		flag.PrintDefaults()
+	}
 
 	flag.Parse()
 

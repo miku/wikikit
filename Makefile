@@ -1,6 +1,6 @@
 all:
-	go fmt wptoldj.go
-	go build wptoldj.go
+	go fmt wikikit.go
+	go build wikikit.go
 
 clean:
-	rm -f wptoldj
+	rm -f wikikit
