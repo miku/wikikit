@@ -70,7 +70,8 @@ func main() {
 
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage of %s:\n", os.Args[0])
-		fmt.Fprintf(os.Stderr, "\nExtract and convert things from wikipedia/wikidata XML dumps.\n\n")
+		fmt.Fprintf(os.Stderr, "\nExtract and convert things from wikipedia/wikidata XML dumps.\n")
+		fmt.Fprintf(os.Stderr, "\nVersion: %s\n\n", AppVersion)
 		flag.PrintDefaults()
 	}
 
