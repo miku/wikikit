@@ -3,7 +3,9 @@ wptoldj
 
 Convert Wikipedia XML dump into JSON.
 
-    $ Usage: wptoldj WIKIPEDIA-XML-DUMP
+    $ wptoldj WIKIPEDIA-XML-DUMP
+
+Output:
 
     {
        "redirect" : {
@@ -14,3 +16,10 @@ Convert Wikipedia XML dump into JSON.
        "title" : "Anarchism"
     }
 
+Extract category information only:
+
+    $ wptoldj.go -c Category WIKIPEDIA-XML-DUMP
+
+Extract authority data only:
+
+    $ wptoldj.go -a WIKIPEDIA-XML-DUMP
