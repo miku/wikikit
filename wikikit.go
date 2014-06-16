@@ -106,8 +106,10 @@ func main() {
 	}
 	defer xmlFile.Close()
 
+	// xml decoder
 	decoder := xml.NewDecoder(xmlFile)
 	var inElement string
+	// category pattern depends on the language, e.g. Kategorie or Category, ...
 	categoryPattern := regexp.MustCompile(`\[\[` + *extractCategories + `:([^\[]+)\]\]`)
 	authorityDataPattern := regexp.MustCompile(`(?mi){{Normdaten[^}]*}}`)
 
