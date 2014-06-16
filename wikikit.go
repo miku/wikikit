@@ -1,4 +1,7 @@
 // Convert Wikipedia XML dump to JSON or extract categories
+// Example inputs:
+// wikidata: http://dumps.wikimedia.org/wikidatawiki/20140612/wikidatawiki-20140612-pages-articles.xml.bz2
+// wikipedia:  http://dumps.wikimedia.org/huwiki/latest/huwiki-latest-pages-articles.xml.bz2
 package main
 
 import (
@@ -39,6 +42,7 @@ type Redirect struct {
 	Title string `xml:"title,attr" json:"title"`
 }
 
+// A page as it occurs on Wikipedia
 type Page struct {
 	Title          string   `xml:"title" json:"title"`
 	CanonicalTitle string   `xml:"ctitle" json:"ctitle"`
@@ -46,6 +50,8 @@ type Page struct {
 	Text           string   `xml:"revision>text" json:"text"`
 }
 
+// A page as it occurs on Wikidata, content will be turned from a string
+// into a substructure with -d switch
 type WikidataPage struct {
 	Title          string      `xml:"title" json:"title"`
 	CanonicalTitle string      `xml:"ctitle" json:"ctitle"`
