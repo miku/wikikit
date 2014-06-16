@@ -20,11 +20,11 @@ Output:
 
 Extract category information only:
 
-    $ wikikit -c Category WIKIPEDIA-XML-DUMP
+    $ wikikit -c "Kategorie" WIKIPEDIA-XML-DUMP
 
 Extract authority data only:
 
-    $ wikikit -a WIKIPEDIA-XML-DUMP
+    $ wikikit -a "Authority control" WIKIPEDIA-XML-DUMP
 
 De-literalize JSON text from wikidata pages/articles dumps:
 
