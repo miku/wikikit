@@ -16,6 +16,7 @@ import (
 	"os"
 	"regexp"
 	"runtime"
+	"runtime/pprof"
 	"strings"
 )
 
@@ -69,7 +70,8 @@ func CanonicalizeTitle(title string) string {
 	return can
 }
 
-func categoryExtractor(in chan *Page,
+// category extraction worker
+func CategoryExtractor(in chan *Page,
 	out chan *string,
 	filter *regexp.Regexp,
 	categoryPattern *regexp.Regexp) {
@@ -105,7 +107,8 @@ func categoryExtractor(in chan *Page,
 	}
 }
 
-func authorityDataExtractor(in chan *Page,
+// authority data extraction worker
+func AuthorityDataExtractor(in chan *Page,
 	out chan *string,
 	filter *regexp.Regexp,
 	authorityDataPattern *regexp.Regexp) {
@@ -137,7 +140,8 @@ func authorityDataExtractor(in chan *Page,
 	}
 }
 
-func wikidataEncoder(in chan *Page,
+// wikidata to json worker
+func WikidataEncoder(in chan *Page,
 	out chan *string,
 	filter *regexp.Regexp) {
 
@@ -184,7 +188,8 @@ func wikidataEncoder(in chan *Page,
 	}
 }
 
-func vanillaConverter(in chan *Page,
+// just XML to json
+func VanillaConverter(in chan *Page,
 	out chan *string,
 	filter *regexp.Regexp) {
 	var pp *Page
@@ -212,7 +217,8 @@ func vanillaConverter(in chan *Page,
 	}
 }
 
-func collect(lines chan *string) {
+// Collect output and write to Stdout
+func StdoutCollector(lines chan *string) {
 	for line := range lines {
 		fmt.Println(*line)
 	}
@@ -248,6 +254,8 @@ func main() {
 	extractAuthorityData := flag.String("a", "", "only extract authority data (Normdaten, Authority control, ...)")
 	decodeWikiData := flag.Bool("d", false, "decode the text key value")
 	numWorkers := flag.Int("w", runtime.NumCPU(), "number of workers")
+	outputFilename := flag.String("o", "", "write output to file (or stdout, if empty)")
+	cpuprofile := flag.String("cpuprofile", "", "write cpu profile to file")
 
 	filter, _ := regexp.Compile("^file:.*|^talk:.*|^special:.*|^wikipedia:.*|^wiktionary:.*|^user:.*|^user_talk:.*")
 
@@ -273,6 +281,15 @@ func main() {
 	if flag.NArg() < 1 {
 		flag.Usage()
 		os.Exit(1)
+	}
+
+	if *cpuprofile != "" {
+		f, err := os.Create(*cpuprofile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		pprof.StartCPUProfile(f)
+		defer pprof.StopCPUProfile()
 	}
 
 	runtime.GOMAXPROCS(*numWorkers)
@@ -301,18 +318,22 @@ func main() {
 	lines := make(chan *string)
 
 	// start the collector
-	go collect(lines)
+	if *outputFilename != "" {
+		go FileCollector(lines, *outputFilename)
+	} else {
+		go StdoutCollector(lines)
+	}
 
 	// start some appropriate workers
 	for i := 0; i < *numWorkers; i++ {
 		if *extractCategories != "" {
-			go categoryExtractor(pages, lines, filter, categoryPattern)
+			go CategoryExtractor(pages, lines, filter, categoryPattern)
 		} else if *extractAuthorityData != "" {
-			go authorityDataExtractor(pages, lines, filter, authorityDataPattern)
+			go AuthorityDataExtractor(pages, lines, filter, authorityDataPattern)
 		} else if *decodeWikiData {
-			go wikidataEncoder(pages, lines, filter)
+			go WikidataEncoder(pages, lines, filter)
 		} else {
-			go vanillaConverter(pages, lines, filter)
+			go VanillaConverter(pages, lines, filter)
 		}
 	}
 
@@ -343,6 +364,6 @@ func main() {
 	for n := 0; n < *numWorkers; n++ {
 		pages <- nil
 	}
+	// close the output channel
 	close(lines)
-
 }
