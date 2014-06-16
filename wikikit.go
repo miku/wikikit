@@ -13,10 +13,11 @@ import (
 	"net/url"
 	"os"
 	"regexp"
+	"runtime"
 	"strings"
 )
 
-const AppVersion = "1.1.0"
+const AppVersion = "1.1.1"
 
 // Here is an example article from the Wikipedia XML dump
 //
@@ -66,12 +67,163 @@ func CanonicalizeTitle(title string) string {
 	return can
 }
 
+func categoryExtractor(in chan *Page,
+	out chan *string,
+	filter *regexp.Regexp,
+	categoryPattern *regexp.Regexp) {
+	var pp *Page
+	for {
+		// get the page pointer
+		pp = <-in
+		if pp == nil {
+			break
+		}
+		// get the page
+		p := *pp
+
+		// do some stuff with the page
+		p.CanonicalTitle = CanonicalizeTitle(p.Title)
+		m := filter.MatchString(p.CanonicalTitle)
+		if !m && p.Redir.Title == "" {
+
+			// specific to category extraction
+			result := categoryPattern.FindAllStringSubmatch(p.Text, -1)
+			for _, value := range result {
+				// replace anything after a |
+				category := strings.TrimSpace(value[1])
+				firstIndex := strings.Index(category, "|")
+				if firstIndex != -1 {
+					category = category[0:firstIndex]
+				}
+
+				line := fmt.Sprintf("%s\t%s", p.Title, category)
+				out <- &line
+			}
+		}
+	}
+}
+
+func authorityDataExtractor(in chan *Page,
+	out chan *string,
+	filter *regexp.Regexp,
+	authorityDataPattern *regexp.Regexp) {
+	var pp *Page
+	for {
+		// get the page pointer
+		pp = <-in
+		if pp == nil {
+			break
+		}
+		// get the page
+		p := *pp
+
+		// do some stuff with the page
+		p.CanonicalTitle = CanonicalizeTitle(p.Title)
+		m := filter.MatchString(p.CanonicalTitle)
+		if !m && p.Redir.Title == "" {
+
+			// specific to category extraction
+			result := authorityDataPattern.FindString(p.Text)
+			if result != "" {
+				// https://cdn.mediacru.sh/JsdjtGoLZBcR.png
+				result = strings.Replace(result, "\t", "", -1)
+				// fmt.Printf("%s\t%s\n", p.Title, result)
+				line := fmt.Sprintf("%s\t%s", p.Title, result)
+				out <- &line
+			}
+		}
+	}
+}
+
+func wikidataEncoder(in chan *Page,
+	out chan *string,
+	filter *regexp.Regexp) {
+
+	var container interface{}
+	var pp *Page
+
+	for {
+		// get the page pointer
+		pp = <-in
+		if pp == nil {
+			break
+		}
+		// get the page
+		p := *pp
+
+		// do some stuff with the page
+		p.CanonicalTitle = CanonicalizeTitle(p.Title)
+		m := filter.MatchString(p.CanonicalTitle)
+		if !m && p.Redir.Title == "" {
+			dec := json.NewDecoder(strings.NewReader(p.Text))
+			dec.UseNumber()
+
+			if err := dec.Decode(&container); err == io.EOF {
+				break
+			} else if err != nil {
+				fmt.Fprintf(os.Stderr, "%s\n", err)
+				continue
+			}
+
+			parsed := WikidataPage{Title: p.Title,
+				CanonicalTitle: p.CanonicalTitle,
+				Content:        container,
+				Redir:          p.Redir}
+
+			b, err := json.Marshal(parsed)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "%s\n", err)
+				os.Exit(2)
+			}
+			// fmt.Println(string(b))
+			line := string(b)
+			out <- &line
+		}
+	}
+}
+
+func vanillaConverter(in chan *Page,
+	out chan *string,
+	filter *regexp.Regexp) {
+	var pp *Page
+	for {
+		// get the page pointer
+		pp = <-in
+		if pp == nil {
+			break
+		}
+		// get the page
+		p := *pp
+
+		// do some stuff with the page
+		p.CanonicalTitle = CanonicalizeTitle(p.Title)
+		m := filter.MatchString(p.CanonicalTitle)
+		if !m && p.Redir.Title == "" {
+
+			b, err := json.Marshal(p)
+			if err != nil {
+				os.Exit(2)
+			}
+			line := string(b)
+			out <- &line
+		}
+	}
+}
+
+func collect(lines chan *string) {
+	for line := range lines {
+		fmt.Println(*line)
+	}
+}
+
 func main() {
 
 	version := flag.Bool("v", false, "prints current version and exits")
 	extractCategories := flag.String("c", "", "only extract categories TSV(page, category), argument is the prefix, e.g. Kategorie or Category, ... ")
 	extractAuthorityData := flag.String("a", "", "only extract authority data (Normdaten, Authority control, ...)")
 	decodeWikiData := flag.Bool("d", false, "decode the text key value")
+	numWorkers := flag.Int("w", runtime.NumCPU(), "number of workers")
+
 	filter, _ := regexp.Compile("^file:.*|^talk:.*|^special:.*|^wikipedia:.*|^wiktionary:.*|^user:.*|^user_talk:.*")
 
 	flag.Usage = func() {
@@ -98,6 +250,8 @@ func main() {
 		os.Exit(1)
 	}
 
+	runtime.GOMAXPROCS(*numWorkers)
+
 	inputFile := flag.Args()[0]
 
 	xmlFile, err := os.Open(inputFile)
@@ -110,13 +264,32 @@ func main() {
 	// xml decoder
 	decoder := xml.NewDecoder(xmlFile)
 	var inElement string
+
 	// category pattern depends on the language, e.g. Kategorie or Category, ...
 	categoryPattern := regexp.MustCompile(`\[\[` + *extractCategories + `:([^\[]+)\]\]`)
 	// Authority data (German only for now)
 	authorityDataPattern := regexp.MustCompile(`(?mi){{` + *extractAuthorityData + `[^}]*}}`)
 
-	// for wikidata
-	var container interface{}
+	// the parsed XML pages channel
+	pages := make(chan *Page)
+	// the strings output channel
+	lines := make(chan *string)
+
+	// start the collector
+	go collect(lines)
+
+	// start some appropriate workers
+	for i := 0; i < *numWorkers; i++ {
+		if *extractCategories != "" {
+			go categoryExtractor(pages, lines, filter, categoryPattern)
+		} else if *extractAuthorityData != "" {
+			go authorityDataExtractor(pages, lines, filter, authorityDataPattern)
+		} else if *decodeWikiData {
+			go wikidataEncoder(pages, lines, filter)
+		} else {
+			go vanillaConverter(pages, lines, filter)
+		}
+	}
 
 	for {
 		// Read tokens from the XML document in a stream.
@@ -135,61 +308,16 @@ func main() {
 				// decode a whole chunk of following XML into the
 				// variable p which is a Page (se above)
 				decoder.DecodeElement(&p, &se)
-
-				// Do some stuff with the page.
-				p.CanonicalTitle = CanonicalizeTitle(p.Title)
-				m := filter.MatchString(p.CanonicalTitle)
-				if !m && p.Redir.Title == "" {
-					if *extractCategories != "" {
-						result := categoryPattern.FindAllStringSubmatch(p.Text, -1)
-						for _, value := range result {
-							// replace anything after a |
-							category := strings.TrimSpace(value[1])
-							firstIndex := strings.Index(category, "|")
-							if firstIndex != -1 {
-								category = category[0:firstIndex]
-							}
-							fmt.Printf("%s\t%s\n", p.Title, category)
-						}
-					} else if *extractAuthorityData != "" {
-						result := authorityDataPattern.FindString(p.Text)
-						if result != "" {
-							// https://cdn.mediacru.sh/JsdjtGoLZBcR.png
-							result = strings.Replace(result, "\t", "", -1)
-							fmt.Printf("%s\t%s\n", p.Title, result)
-						}
-					} else if *decodeWikiData {
-
-						dec := json.NewDecoder(strings.NewReader(p.Text))
-						dec.UseNumber()
-
-						if err := dec.Decode(&container); err == io.EOF {
-							break
-						} else if err != nil {
-							fmt.Fprintf(os.Stderr, "%s\n", err)
-							continue
-						}
-
-						parsed := WikidataPage{Title: p.Title,
-							CanonicalTitle: p.CanonicalTitle,
-							Content:        container,
-							Redir:          p.Redir}
-
-						b, err := json.Marshal(parsed)
-						if err != nil {
-							os.Exit(2)
-						}
-						fmt.Println(string(b))
-					} else {
-						b, err := json.Marshal(p)
-						if err != nil {
-							os.Exit(2)
-						}
-						fmt.Println(string(b))
-					}
-				}
+				pages <- &p
 			}
 		default:
 		}
 	}
+
+	// kill workers
+	for n := 0; n < *numWorkers; n++ {
+		pages <- nil
+	}
+	close(lines)
+
 }
