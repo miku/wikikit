@@ -69,8 +69,8 @@ func CanonicalizeTitle(title string) string {
 func main() {
 
 	version := flag.Bool("v", false, "prints current version and exits")
-	extractCategories := flag.String("c", "", "only extract categories TSV(page, category)")
-	extractAuthorityData := flag.Bool("a", false, "only extract authority data (Normdaten)")
+	extractCategories := flag.String("c", "", "only extract categories TSV(page, category), argument is the prefix, e.g. Kategorie or Category, ... ")
+	extractAuthorityData := flag.String("a", "", "only extract authority data (Normdaten, Authority control, ...)")
 	decodeWikiData := flag.Bool("d", false, "decode the text key value")
 	filter, _ := regexp.Compile("^file:.*|^talk:.*|^special:.*|^wikipedia:.*|^wiktionary:.*|^user:.*|^user_talk:.*")
 
@@ -83,8 +83,8 @@ func main() {
 
 	flag.Parse()
 
-	if *extractCategories != "" && *extractAuthorityData {
-		fmt.Println("It's either -a or -c")
+	if *extractCategories != "" && *extractAuthorityData != "" {
+		fmt.Fprintln(os.Stderr, "it's either -a or -c")
 		os.Exit(1)
 	}
 
@@ -97,6 +97,7 @@ func main() {
 		flag.Usage()
 		os.Exit(1)
 	}
+
 	inputFile := flag.Args()[0]
 
 	xmlFile, err := os.Open(inputFile)
@@ -111,7 +112,8 @@ func main() {
 	var inElement string
 	// category pattern depends on the language, e.g. Kategorie or Category, ...
 	categoryPattern := regexp.MustCompile(`\[\[` + *extractCategories + `:([^\[]+)\]\]`)
-	authorityDataPattern := regexp.MustCompile(`(?mi){{Normdaten[^}]*}}`)
+	// Authority data (German only for now)
+	authorityDataPattern := regexp.MustCompile(`(?mi){{` + *extractAuthorityData + `[^}]*}}`)
 
 	// for wikidata
 	var container interface{}
@@ -149,7 +151,7 @@ func main() {
 							}
 							fmt.Printf("%s\t%s\n", p.Title, category)
 						}
-					} else if *extractAuthorityData {
+					} else if *extractAuthorityData != "" {
 						result := authorityDataPattern.FindString(p.Text)
 						if result != "" {
 							// https://cdn.mediacru.sh/JsdjtGoLZBcR.png
