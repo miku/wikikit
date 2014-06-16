@@ -5,11 +5,13 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"encoding/xml"
 	"flag"
 	"fmt"
 	"io"
+	"log"
 	"net/url"
 	"os"
 	"regexp"
@@ -214,6 +216,29 @@ func collect(lines chan *string) {
 	for line := range lines {
 		fmt.Println(*line)
 	}
+}
+
+// Collect output and write to file
+func FileCollector(lines chan *string, filename string) {
+	output, err := os.Create(filename)
+	if err != nil {
+		panic(err)
+	}
+	// close fo on exit and check for its returned error
+	defer func() {
+		if err := output.Close(); err != nil {
+			panic(err)
+		}
+	}()
+	// 4M buffer size
+	w := bufio.NewWriter(output)
+	for line := range lines {
+		_, err = w.WriteString(*line + "\n")
+		if err != nil {
+			panic(err)
+		}
+	}
+	w.Flush()
 }
 
 func main() {
