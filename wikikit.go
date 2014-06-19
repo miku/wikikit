@@ -20,7 +20,7 @@ import (
 	"strings"
 )
 
-const AppVersion = "1.1.1"
+const AppVersion = "1.1.2"
 
 // Here is an example article from the Wikipedia XML dump
 //
@@ -73,6 +73,7 @@ func CanonicalizeTitle(title string) string {
 // category extraction worker
 func CategoryExtractor(in chan *Page,
 	out chan *string,
+	ack chan bool,
 	filter *regexp.Regexp,
 	categoryPattern *regexp.Regexp) {
 	var pp *Page
@@ -105,11 +106,13 @@ func CategoryExtractor(in chan *Page,
 			}
 		}
 	}
+	ack <- true
 }
 
 // authority data extraction worker
 func AuthorityDataExtractor(in chan *Page,
 	out chan *string,
+	ack chan bool,
 	filter *regexp.Regexp,
 	authorityDataPattern *regexp.Regexp) {
 	var pp *Page
@@ -138,11 +141,13 @@ func AuthorityDataExtractor(in chan *Page,
 			}
 		}
 	}
+	ack <- true
 }
 
 // wikidata to json worker
 func WikidataEncoder(in chan *Page,
 	out chan *string,
+	ack chan bool,
 	filter *regexp.Regexp) {
 
 	var container interface{}
@@ -179,18 +184,21 @@ func WikidataEncoder(in chan *Page,
 			b, err := json.Marshal(parsed)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "%s\n", err)
-				os.Exit(2)
+				// os.Exit(2)
+				continue
 			}
 			// fmt.Println(string(b))
 			line := string(b)
 			out <- &line
 		}
 	}
+	ack <- true
 }
 
 // just XML to json
 func VanillaConverter(in chan *Page,
 	out chan *string,
+	ack chan bool,
 	filter *regexp.Regexp) {
 	var pp *Page
 	for {
@@ -206,15 +214,16 @@ func VanillaConverter(in chan *Page,
 		p.CanonicalTitle = CanonicalizeTitle(p.Title)
 		m := filter.MatchString(p.CanonicalTitle)
 		if !m && p.Redir.Title == "" {
-
 			b, err := json.Marshal(p)
 			if err != nil {
-				os.Exit(2)
+				fmt.Fprintln(os.Stderr, err)
+			} else {
+				line := string(b)
+				out <- &line
 			}
-			line := string(b)
-			out <- &line
 		}
 	}
+	ack <- true
 }
 
 // Collect output and write to Stdout
@@ -236,7 +245,6 @@ func FileCollector(lines chan *string, filename string) {
 			panic(err)
 		}
 	}()
-	// 4M buffer size
 	w := bufio.NewWriter(output)
 	for line := range lines {
 		_, err = w.WriteString(*line + "\n")
@@ -295,7 +303,6 @@ func main() {
 	runtime.GOMAXPROCS(*numWorkers)
 
 	inputFile := flag.Args()[0]
-
 	xmlFile, err := os.Open(inputFile)
 	if err != nil {
 		fmt.Println("Error opening file:", err)
@@ -307,33 +314,34 @@ func main() {
 	decoder := xml.NewDecoder(xmlFile)
 	var inElement string
 
-	// category pattern depends on the language, e.g. Kategorie or Category, ...
-	categoryPattern := regexp.MustCompile(`\[\[` + *extractCategories + `:([^\[]+)\]\]`)
-	// Authority data (German only for now)
-	authorityDataPattern := regexp.MustCompile(`(?mi){{` + *extractAuthorityData + `[^}]*}}`)
-
 	// the parsed XML pages channel
-	pages := make(chan *Page)
+	in := make(chan *Page)
 	// the strings output channel
-	lines := make(chan *string)
+	out := make(chan *string)
+	// the quit ack channel
+	ack := make(chan bool)
 
 	// start the collector
 	if *outputFilename != "" {
-		go FileCollector(lines, *outputFilename)
+		go FileCollector(out, *outputFilename)
 	} else {
-		go StdoutCollector(lines)
+		go StdoutCollector(out)
 	}
 
 	// start some appropriate workers
 	for i := 0; i < *numWorkers; i++ {
 		if *extractCategories != "" {
-			go CategoryExtractor(pages, lines, filter, categoryPattern)
+			// category pattern depends on the language, e.g. Kategorie or Category, ...
+			pattern := regexp.MustCompile(`\[\[` + *extractCategories + `:([^\[]+)\]\]`)
+			go CategoryExtractor(in, out, ack, filter, pattern)
 		} else if *extractAuthorityData != "" {
-			go AuthorityDataExtractor(pages, lines, filter, authorityDataPattern)
+			// Authority data (German only for now)
+			pattern := regexp.MustCompile(`(?mi){{` + *extractAuthorityData + `[^}]*}}`)
+			go AuthorityDataExtractor(in, out, ack, filter, pattern)
 		} else if *decodeWikiData {
-			go WikidataEncoder(pages, lines, filter)
+			go WikidataEncoder(in, out, ack, filter)
 		} else {
-			go VanillaConverter(pages, lines, filter)
+			go VanillaConverter(in, out, ack, filter)
 		}
 	}
 
@@ -354,7 +362,7 @@ func main() {
 				// decode a whole chunk of following XML into the
 				// variable p which is a Page (se above)
 				decoder.DecodeElement(&p, &se)
-				pages <- &p
+				in <- &p
 			}
 		default:
 		}
@@ -362,8 +370,11 @@ func main() {
 
 	// kill workers
 	for n := 0; n < *numWorkers; n++ {
-		pages <- nil
+		in <- nil
+	}
+	for n := 0; n < *numWorkers; n++ {
+		<-ack
 	}
 	// close the output channel
-	close(lines)
+	close(out)
 }
